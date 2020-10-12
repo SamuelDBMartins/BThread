@@ -6,22 +6,26 @@
 #include "bthread_private.h"
 #include <stdlib.h>
 #include <stdint.h>
-#include <zconf.h>
+#include <sys/time.h>
 
+#define STACK_SIZE (1 << 16)
 #define save_context(CONTEXT) sigsetjmp(CONTEXT, 1)
 #define restore_context(CONTEXT) siglongjmp(CONTEXT, 1)
 
 __bthread_scheduler_private scheduler = {0};
+bthread_t cnt = 0;
 
-//variabile globale??
+double get_current_time_millis()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
+}
+
 __bthread_scheduler_private* bthread_get_scheduler() {
     return &scheduler;
 }
 
-//malloc?
-//bthread corresponds to the position in the queue
-//ready
-//return value
 int bthread_create(bthread_t *bthread, const bthread_attr_t *attr,
                    void *(*start_routine) (void *), void *arg) {
     __bthread_private *bthread_private = malloc(sizeof(__bthread_private));
@@ -29,9 +33,10 @@ int bthread_create(bthread_t *bthread, const bthread_attr_t *attr,
     bthread_private->body = start_routine;
     bthread_private->stack = NULL;
     bthread_private->state = __BTHREAD_READY;
-    bthread_private->tid = *bthread;
+    bthread_private->tid = cnt++;
     bthread_private->arg = arg;
-    tqueue_enqueue(&bthread_get_scheduler()->queue, bthread_private);
+    *bthread = bthread_private->tid;
+    return tqueue_enqueue(&bthread_get_scheduler()->queue, bthread_private);
 }
 
 void bthread_yield() {
@@ -41,14 +46,12 @@ void bthread_yield() {
     }
 }
 
-//retvalue??
 void bthread_exit(void *retval) {
     __bthread_private *thread = tqueue_get_data(bthread_get_scheduler()->current_item);
     thread->retval = retval;
     thread->state = __BTHREAD_ZOMBIE;
     bthread_yield();
 }
-
 
 static int bthread_check_if_zombie(bthread_t bthread, void **retval) {
     TQueue node = bthread_get_queue_at(bthread);
@@ -74,21 +77,22 @@ static int bthread_check_if_zombie(bthread_t bthread, void **retval) {
 
 static TQueue bthread_get_queue_at(bthread_t bthread) {
     TQueue q = bthread_get_scheduler()->queue;
-    TQueue actual_node;
+    TQueue actual_node = q;
 
-    int size = tqueue_size(q);
-    for (int i = 0; i < size; ++i) {
-        actual_node = tqueue_at_offset(q, 0);
+    if (q == NULL)
+        return NULL;
+
+    do {
+        actual_node = tqueue_at_offset(actual_node, 1);
         __bthread_private *b = tqueue_get_data(actual_node);
         if (b->tid == bthread) {
             return actual_node;
         }
-    }
+    }while(actual_node != q);
+
     return NULL;
 }
 
-//STACK_SIZE??
-//handler zombie threads
 int bthread_join(bthread_t bthread, void **retval) {
     volatile __bthread_scheduler_private *scheduler = bthread_get_scheduler();
     scheduler->current_item = scheduler->queue;
@@ -116,4 +120,15 @@ int bthread_join(bthread_t bthread, void **retval) {
 #endif
         bthread_exit(tp->body(tp->arg));
     }
+}
+
+void bthread_sleep(double ms) {
+    TQueue node = bthread_get_scheduler()->current_item;
+    __bthread_private *thread = tqueue_get_data(node);
+    thread->wake_up_time = get_current_time_millis() + ms;
+    thread->state = __BTHREAD_SLEEPING;
+    while (get_current_time_millis() < thread->wake_up_time) {
+        bthread_yield();
+    }
+    thread->state = __BTHREAD_READY;
 }
