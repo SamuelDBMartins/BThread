@@ -22,6 +22,7 @@ typedef struct {
     jmp_buf context;
     void* retval;
     double wake_up_time;
+    int cancel_req;
 } __bthread_private;
 
 typedef struct {
@@ -38,5 +39,7 @@ void bthread_cleanup();
 static int bthread_check_if_zombie(bthread_t bthread, void **retval);
 
 static TQueue bthread_get_queue_at(bthread_t bthread);
+
+void bthread_testcancel();
 
 #endif //BTHREAD_BTHREAD_PRIVATE_H

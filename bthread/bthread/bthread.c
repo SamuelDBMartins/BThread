@@ -102,6 +102,10 @@ int bthread_join(bthread_t bthread, void **retval) {
     do {
         scheduler->current_item = tqueue_at_offset(scheduler->current_item, 1);
         tp = (__bthread_private *) tqueue_get_data(scheduler->current_item);
+
+        if(tp->state == __BTHREAD_SLEEPING && get_current_time_millis() > tp->wake_up_time) {
+                tp->state = __BTHREAD_READY;
+        }
     } while (tp->state != __BTHREAD_READY);
     if (tp->stack) {
         restore_context(tp->context);
@@ -127,8 +131,19 @@ void bthread_sleep(double ms) {
     __bthread_private *thread = tqueue_get_data(node);
     thread->wake_up_time = get_current_time_millis() + ms;
     thread->state = __BTHREAD_SLEEPING;
-    while (get_current_time_millis() < thread->wake_up_time) {
-        bthread_yield();
-    }
-    thread->state = __BTHREAD_READY;
+    bthread_yield();
+}
+
+int bthread_cancel(bthread_t bthread) {
+    TQueue node = bthread_get_queue_at(bthread);
+    __bthread_private *thread = tqueue_get_data(node);
+    thread->cancel_req = 1;
+    return -1;
+}
+
+void bthread_testcancel() {
+    TQueue node = bthread_get_scheduler();
+    __bthread_private *thread = tqueue_get_data(node);
+    if (thread->cancel_req)
+        bthread_exit(NULL);
 }
