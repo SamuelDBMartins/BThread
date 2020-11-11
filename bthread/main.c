@@ -6,7 +6,7 @@
 
 void* mythread(void* arg) {
     int cnt = 0;
-    for (int i = 0; i < 10000; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         cnt++;
         bthread_sleep((rand() / RAND_MAX) + 0.5);
     }

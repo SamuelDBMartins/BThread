@@ -80,15 +80,14 @@ TQueue tqueue_at_offset(TQueue q, unsigned long int offset) {
 
     TQueueNode *actual_node = q;
     for (int i = 0; i < offset; ++i) {
-        if (actual_node->next == q) {
-            return NULL;
-        }
         actual_node = actual_node->next;
     }
     return actual_node;
 }
 
 void* tqueue_get_data(TQueue q) {
+    if (q == NULL)
+        return NULL;
     return q->data;
 }
 

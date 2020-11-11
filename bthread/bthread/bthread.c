@@ -88,6 +88,10 @@ static int bthread_check_if_zombie(bthread_t bthread, void **retval) {
     TQueue node = bthread_get_queue_at(bthread);
     __bthread_private *b = tqueue_get_data(node);
 
+    if (bthread_get_scheduler()->queue == NULL) {
+        return 1;
+    }
+
     if (b->state != __BTHREAD_ZOMBIE) {
         return 0;
     }
@@ -102,6 +106,7 @@ static int bthread_check_if_zombie(bthread_t bthread, void **retval) {
     } else {
         tqueue_pop(&node);
     }
+    bthread_get_scheduler()->current_item = bthread_get_scheduler()->queue;
     return 1;
 }
 
@@ -141,6 +146,7 @@ static void bthread_setup_timer() {
 int bthread_join(bthread_t bthread, void **retval) {
     volatile __bthread_scheduler_private *scheduler = bthread_get_scheduler();
     scheduler->current_item = scheduler->queue;
+    bthread_block_timer_signal();
     save_context(scheduler->context);
     if (bthread_check_if_zombie(bthread, retval)) return 0;
     __bthread_private *tp;
