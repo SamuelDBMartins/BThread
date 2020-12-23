@@ -9,6 +9,8 @@
 #include "bthread.h"
 #include "../tqueue/tqueue.h"
 
+typedef void (*bthread_scheduling_routine)();
+
 typedef enum { __BTHREAD_READY = 0, __BTHREAD_BLOCKED, __BTHREAD_SLEEPING,
     __BTHREAD_ZOMBIE} bthread_state;
 
@@ -23,6 +25,8 @@ typedef struct {
     void* retval;
     double wake_up_time;
     int cancel_req;
+    int priority;
+    int current_priority;
 } __bthread_private;
 
 typedef struct {
@@ -30,6 +34,7 @@ typedef struct {
     TQueue current_item;
     jmp_buf context;
     bthread_t current_tid;
+    bthread_scheduling_routine scheduling_routine;
 } __bthread_scheduler_private;
 
 __bthread_scheduler_private* bthread_get_scheduler();

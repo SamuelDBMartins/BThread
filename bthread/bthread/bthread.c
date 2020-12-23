@@ -13,8 +13,6 @@
 #include <stdio.h>
 
 #define STACK_SIZE (1 << 16)
-#define save_context(CONTEXT) sigsetjmp(CONTEXT, 1)
-#define restore_context(CONTEXT) siglongjmp(CONTEXT, 1)
 #define QUANTUM_USEC 100
 
 __bthread_scheduler_private mainScheduler = {0};
@@ -63,6 +61,7 @@ int bthread_create(bthread_t *bthread, const bthread_attr_t *attr,
     bthread_private->state = __BTHREAD_READY;
     bthread_private->tid = cnt++;
     bthread_private->arg = arg;
+    bthread_private->priority = 1;
     *bthread = bthread_private->tid;
     return tqueue_enqueue(&bthread_get_scheduler()->queue, bthread_private);
 }
@@ -71,8 +70,12 @@ int bthread_create(bthread_t *bthread, const bthread_attr_t *attr,
 void bthread_yield() {
     __bthread_private *thread = tqueue_get_data(bthread_get_scheduler()->current_item);
     bthread_block_timer_signal();
-    if (!save_context(thread->context)) {
-        restore_context(bthread_get_scheduler()->context);
+
+    if (thread->state != __BTHREAD_ZOMBIE && --thread->current_priority > 1)
+        return;
+
+    if (!sigsetjmp(thread->context, 1)) {
+        siglongjmp(bthread_get_scheduler()->context, 1);
     }
     bthread_unblock_timer_signal();
 }
@@ -147,11 +150,11 @@ int bthread_join(bthread_t bthread, void **retval) {
     volatile __bthread_scheduler_private *scheduler = bthread_get_scheduler();
     scheduler->current_item = scheduler->queue;
     bthread_block_timer_signal();
-    save_context(scheduler->context);
+    sigsetjmp(scheduler->context, 1);
     if (bthread_check_if_zombie(bthread, retval)) return 0;
     __bthread_private *tp;
     do {
-        scheduler->current_item = tqueue_at_offset(scheduler->current_item, 1);
+        scheduler->scheduling_routine();
         tp = (__bthread_private *) tqueue_get_data(scheduler->current_item);
 
         if (tp->state == __BTHREAD_SLEEPING && get_current_time_millis() > tp->wake_up_time) {
@@ -159,11 +162,11 @@ int bthread_join(bthread_t bthread, void **retval) {
         }
     } while (tp->state != __BTHREAD_READY);
     if (tp->stack) {
-        restore_context(tp->context);
+        tp->current_priority = tp->priority;
+        siglongjmp(tp->context, 1);
     } else {
         tp->stack = (char *) malloc(sizeof(char) * STACK_SIZE);
-        unsigned long target =
-                tp->stack + STACK_SIZE - 1;
+        unsigned long target = tp->stack + STACK_SIZE - 1;
 #if __APPLE__
         // OSX requires 16 bytes aligned stack
         target -= (target % 16);
@@ -193,10 +196,36 @@ int bthread_cancel(bthread_t bthread) {
     return -1;
 }
 
+void bthread_setPriority(bthread_t bthread, int priority) {
+    TQueue node = bthread_get_queue_at(bthread);
+    __bthread_private *thread = tqueue_get_data(node);
+    thread->priority = priority;
+}
+
+void round_robin_scheduling() {
+    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
+    scheduler->current_item = tqueue_at_offset(scheduler->current_item, 1);
+}
+
+void random_scheduling() {
+    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
+    int i = (rand() % tqueue_size(scheduler->queue)) + 1;
+    scheduler->current_item = tqueue_at_offset(scheduler->current_item, i);
+}
+
+void bthread_setScheduling(int i) {
+    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
+    if (i == 1) {
+        scheduler->scheduling_routine = random_scheduling;
+    } else {
+        scheduler->scheduling_routine = round_robin_scheduling;
+    }
+
+}
+
 void bthread_testcancel() {
     TQueue node = bthread_get_scheduler()->current_item;
     __bthread_private *thread = tqueue_get_data(node);
     if (thread->cancel_req)
         bthread_exit(NULL);
 }
-

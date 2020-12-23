@@ -23,6 +23,10 @@ void bthread_exit(void *retval);
 
 void bthread_sleep(double ms);
 
+void bthread_setPriority(bthread_t bthread, int priority);
+
 int bthread_cancel(bthread_t bthread);
+
+void bthread_setScheduling(int i);
 
 #endif //BTHREAD_BTHREAD_H
