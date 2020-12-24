@@ -45,10 +45,20 @@ static int bthread_check_if_zombie(bthread_t bthread, void **retval);
 
 static TQueue bthread_get_queue_at(bthread_t bthread);
 
+void bthread_testcancel();
+
 void bthread_block_timer_signal();
 
 void bthread_unblock_timer_signal();
 
-void bthread_testcancel();
+static void bthread_setup_timer();
+
+double get_current_time_millis();
+
+void bthread_round_robin_scheduling();
+
+void bthread_random_scheduling();
+
+void bthread_printf(const char *format, ...);
 
 #endif //BTHREAD_BTHREAD_PRIVATE_H

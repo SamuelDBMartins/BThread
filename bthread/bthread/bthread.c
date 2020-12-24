@@ -16,43 +16,7 @@
 #define QUANTUM_USEC 100
 
 bthread_t cnt = 0;
-
-void round_robin_scheduling() {
-    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
-    scheduler->current_item = tqueue_at_offset(scheduler->current_item, 1);
-}
-
-__bthread_scheduler_private mainScheduler = {.scheduling_routine = round_robin_scheduling};
-
-double get_current_time_millis() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
-}
-
-void bthread_block_timer_signal() {
-    sigset_t sigsetNew;
-    sigemptyset(&sigsetNew);
-    sigaddset(&sigsetNew, SIGVTALRM);
-    sigprocmask(SIG_BLOCK, &sigsetNew, NULL);
-}
-
-void bthread_unblock_timer_signal() {
-    sigset_t sigsetNew;
-    sigemptyset(&sigsetNew);
-    sigaddset(&sigsetNew, SIGVTALRM);
-    sigprocmask(SIG_UNBLOCK, &sigsetNew, NULL);
-}
-
-void bthread_printf(const char *format, ...) // requires stdlib.h and stdarg.h
-{
-    bthread_block_timer_signal();
-    va_list args;
-    va_start(args, format);
-    vprintf(format, args);
-    va_end(args);
-    bthread_unblock_timer_signal();
-}
+__bthread_scheduler_private mainScheduler = {.scheduling_routine = bthread_round_robin_scheduling};
 
 __bthread_scheduler_private *bthread_get_scheduler() {
     return &mainScheduler;
@@ -72,6 +36,11 @@ int bthread_create(bthread_t *bthread, const bthread_attr_t *attr,
     return tqueue_enqueue(&bthread_get_scheduler()->queue, bthread_private);
 }
 
+void bthread_set_priority(bthread_t bthread, int priority) {
+    TQueue node = bthread_get_queue_at(bthread);
+    __bthread_private *thread = tqueue_get_data(node);
+    thread->priority = priority;
+}
 
 void bthread_yield() {
     __bthread_private *thread = tqueue_get_data(bthread_get_scheduler()->current_item);
@@ -136,22 +105,6 @@ static TQueue bthread_get_queue_at(bthread_t bthread) {
     return NULL;
 }
 
-
-static void bthread_setup_timer() {
-    static bool initialized = false;
-
-    if (!initialized) {
-        signal(SIGVTALRM, (void (*)()) bthread_yield);
-        struct itimerval time;
-        time.it_interval.tv_sec = 0;
-        time.it_interval.tv_usec = QUANTUM_USEC;
-        time.it_value.tv_sec = 0;
-        time.it_value.tv_usec = QUANTUM_USEC;
-        initialized = true;
-        setitimer(ITIMER_VIRTUAL, &time, NULL);
-    }
-}
-
 int bthread_join(bthread_t bthread, void **retval) {
     volatile __bthread_scheduler_private *scheduler = bthread_get_scheduler();
     scheduler->current_item = scheduler->queue;
@@ -202,31 +155,75 @@ int bthread_cancel(bthread_t bthread) {
     return -1;
 }
 
-void bthread_setPriority(bthread_t bthread, int priority) {
-    TQueue node = bthread_get_queue_at(bthread);
-    __bthread_private *thread = tqueue_get_data(node);
-    thread->priority = priority;
-}
-
-void random_scheduling() {
-    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
-    int i = (rand() % tqueue_size(scheduler->queue)) + 1;
-    scheduler->current_item = tqueue_at_offset(scheduler->current_item, i);
-}
-
-void bthread_setScheduling(int i) {
-    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
-    if (i == 1) {
-        scheduler->scheduling_routine = random_scheduling;
-    } else {
-        scheduler->scheduling_routine = round_robin_scheduling;
-    }
-
-}
-
 void bthread_testcancel() {
     TQueue node = bthread_get_scheduler()->current_item;
     __bthread_private *thread = tqueue_get_data(node);
     if (thread->cancel_req)
         bthread_exit(NULL);
+}
+
+static void bthread_setup_timer() {
+    static bool initialized = false;
+
+    if (!initialized) {
+        signal(SIGVTALRM, (void (*)()) bthread_yield);
+        struct itimerval time;
+        time.it_interval.tv_sec = 0;
+        time.it_interval.tv_usec = QUANTUM_USEC;
+        time.it_value.tv_sec = 0;
+        time.it_value.tv_usec = QUANTUM_USEC;
+        initialized = true;
+        setitimer(ITIMER_VIRTUAL, &time, NULL);
+    }
+}
+
+double get_current_time_millis() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+}
+
+void bthread_block_timer_signal() {
+    sigset_t sigsetNew;
+    sigemptyset(&sigsetNew);
+    sigaddset(&sigsetNew, SIGVTALRM);
+    sigprocmask(SIG_BLOCK, &sigsetNew, NULL);
+}
+
+void bthread_unblock_timer_signal() {
+    sigset_t sigsetNew;
+    sigemptyset(&sigsetNew);
+    sigaddset(&sigsetNew, SIGVTALRM);
+    sigprocmask(SIG_UNBLOCK, &sigsetNew, NULL);
+}
+
+void bthread_scheduling(int i) {
+    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
+    if (i == 1) {
+        scheduler->scheduling_routine = bthread_random_scheduling;
+    } else {
+        scheduler->scheduling_routine = bthread_round_robin_scheduling;
+    }
+
+}
+
+void bthread_round_robin_scheduling() {
+    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
+    scheduler->current_item = tqueue_at_offset(scheduler->current_item, 1);
+}
+
+void bthread_random_scheduling() {
+    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
+    int i = (rand() % tqueue_size(scheduler->queue)) + 1;
+    scheduler->current_item = tqueue_at_offset(scheduler->current_item, i);
+}
+
+void bthread_printf(const char *format, ...) // requires stdlib.h and stdarg.h
+{
+    bthread_block_timer_signal();
+    va_list args;
+    va_start(args, format);
+    vprintf(format, args);
+    va_end(args);
+    bthread_unblock_timer_signal();
 }
