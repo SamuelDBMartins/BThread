@@ -3,4 +3,4 @@ project(bthread C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(bthread main.c bthread/bthread.h bthread/bthread.c tqueue/tqueue.c tqueue/tqueue.h bthread/bthread_private.h)
+add_executable(bthread bthread/bthread.h bthread/bthread.c tqueue/tqueue.c tqueue/tqueue.h bthread/bthread_private.h mutex/tmutex.h mutex/tmutex.c test/mutexTest.c)

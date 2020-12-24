@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "tqueue.h"
+#include "../tqueue/tqueue.h"
 
 int main() {
     TQueue queue = NULL;

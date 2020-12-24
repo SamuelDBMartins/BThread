@@ -1,8 +1,10 @@
-#include <stdio.h>
+//
+// Created by smartins
+//
+
 #include <stdlib.h>
 
-#include "bthread/bthread.h"
-// gcc -o esempio esempio.c bthread.o schedulers.o tbarrier.o tcondition.o thelper.o tmutex.o tqueue.o tsemaphore.o
+#include "../bthread/bthread.h"
 
 void* mythread(void* arg) {
     int cnt = 0;
@@ -16,7 +18,6 @@ void* mythread(void* arg) {
 int main() {
     bthread_t t1, t2, t3;
     int i1, i2, i3;
-    bthread_setScheduling(0);
     bthread_create(&t1, NULL, mythread, NULL);
     bthread_create(&t2, NULL, mythread, NULL);
     bthread_create(&t3, NULL, mythread, NULL);

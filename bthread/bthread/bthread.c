@@ -15,8 +15,14 @@
 #define STACK_SIZE (1 << 16)
 #define QUANTUM_USEC 100
 
-__bthread_scheduler_private mainScheduler = {0};
 bthread_t cnt = 0;
+
+void round_robin_scheduling() {
+    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
+    scheduler->current_item = tqueue_at_offset(scheduler->current_item, 1);
+}
+
+__bthread_scheduler_private mainScheduler = {.scheduling_routine = round_robin_scheduling};
 
 double get_current_time_millis() {
     struct timeval tv;
@@ -200,11 +206,6 @@ void bthread_setPriority(bthread_t bthread, int priority) {
     TQueue node = bthread_get_queue_at(bthread);
     __bthread_private *thread = tqueue_get_data(node);
     thread->priority = priority;
-}
-
-void round_robin_scheduling() {
-    __bthread_scheduler_private *scheduler = bthread_get_scheduler();
-    scheduler->current_item = tqueue_at_offset(scheduler->current_item, 1);
 }
 
 void random_scheduling() {

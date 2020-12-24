@@ -5,6 +5,8 @@
 #ifndef BTHREAD_BTHREAD_H
 #define BTHREAD_BTHREAD_H
 
+#include <stdio.h>
+
 typedef unsigned long int bthread_t;
 
 typedef struct {
