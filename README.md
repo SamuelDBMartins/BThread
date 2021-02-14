@@ -13,32 +13,32 @@ Choose scheduling method:
 void bthread_scheduling(int i);
 ```
 
-Create thread
+Create thread:
 ```c
 int bthread_create(bthread_t *bthread, const bthread_attr_t *attr, void *(*start_routine) (void *), void *arg);
 ```
 
-Set priority
+Set priority:
 ```c
 void bthread_set_priority(bthread_t bthread, int priority);
 ```
 
-Wait for thread to finish
+Wait for thread to finish:
 ```c
 int bthread_join(bthread_t bthread, void **retval);
 ```
 
-Put thread at sleep
+Put thread at sleep:
 ```c
 void bthread_sleep(double ms);
 ```
 
-Yield active thread
+Yield active thread:
 ```c
 void bthread_yield();
 ```
 
-Request cancellation hread
+Request cancellation thread:
 ```c
 int bthread_cancel(bthread_t bthread);
 ```
